@@ -1,0 +1,106 @@
+﻿@page "/produtos"
+@using System.Globalization
+@attribute [Authorize]
+@inject IProdutoServices ProdutoServices
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+@rendermode InteractiveServer
+
+<ModalDeConfirmacao @ref="confirmacaoDeDelete" 
+    Titulo="Confirmação de exclusão."
+    onCancela="()=> CancelaModalDeDelete()"
+    onConfirma="() => DeletarProduto(removerProduto)">
+    <h5>Deseja deletar o produto <span class="text-danger">@nomeDoProduto</span>?</h5>
+</ModalDeConfirmacao>
+
+<PageTitle>Produtos</PageTitle>
+
+<MudButton Href="novoProduto"
+           Variant="Variant.Text"
+           EndIcon="@Icons.Material.Filled.Add"
+           Color="Color.Success">
+    Novo produto
+</MudButton>
+
+    <MudDataGrid T="Produto" Filterable="true" Hideable="true" Items="@produtos" QuickFilter="@_quickFilter">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Produtos</MudText>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString" Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true"
+                          AdornmentIcon="@Icons.Material.Filled.Search"  Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="x => x.Codigo" Title="Codigo" Sortable="false" Filterable="false" />
+            <PropertyColumn Property="x => x.Nome"   Sortable="false" Filterable="false" />
+            <PropertyColumn Property="x => x.NomeDaCategoria" Title="Categoria"  Sortable="false" Filterable="false" />
+            <PropertyColumn Property="x => x.Quantidade" Sortable="false" Filterable="false" />
+            <PropertyColumn Property="x => x.Valor" Title="Preço de venda" Sortable="false" Filterable="false" Format="C" />
+            <PropertyColumn Property="x => x.ValorDeCusto" Title="Preço de custo" Sortable="false" Filterable="false" Format="C" />
+            <PropertyColumn Property="x => x.MargemLucro" Title="% de lucro" Sortable="false" Filterable="false" Format="P" />
+            <TemplateColumn Filterable="false" Sortable="false" Title="Ativo/Não Ativo">
+                <CellTemplate>
+                    <MudSwitch @bind-Value="context.Item.IsActive" Disabled="true" Color="Color.Success" />
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Filterable="false" Sortable="false" CellClass="d-flex justify-end">
+                    <CellTemplate>
+                         <MudIconButton  Color="Color.Info" Icon="@Icons.Material.Outlined.Edit" OnClick="@(() => NavigationManager.NavigateTo($"/novoProduto{context.Item.Id}"))" />
+                <MudIconButton Color="Color.Error" Icon="@Icons.Material.Outlined.Delete" OnClick="@(() => AbrirModalDeExclusao(context.Item.Id, context.Item.Nome))" />
+                    </CellTemplate>
+                </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+
+@code {
+
+    private List<Produto> produtos = new List<Produto>();
+    private string _searchString;
+    ModalDeConfirmacao confirmacaoDeDelete;
+    private Guid removerProduto { get; set; }
+    private string nomeDoProduto { get; set; }
+
+    protected override async Task OnInitializedAsync() => produtos = await ProdutoServices.GetAllProdutosAsync();
+
+    void AbrirModalDeExclusao(Guid id, string nome)
+    {
+        confirmacaoDeDelete.Exibir();
+        removerProduto = id;
+        nomeDoProduto = nome;
+    }
+
+    void CancelaModalDeDelete() => confirmacaoDeDelete.Ocultar();
+
+    async Task DeletarProduto(Guid id) 
+    {
+
+        await ProdutoServices.DeleteProdutoAsync((Guid)id);
+        produtos = await ProdutoServices.GetAllProdutosAsync();
+        StateHasChanged();
+        confirmacaoDeDelete.Ocultar();
+
+
+    }  
+    
+    private Func<Produto, bool> _quickFilter => x =>
+     {
+     if (string.IsNullOrWhiteSpace(_searchString))
+         return true;
+
+     if (x.Codigo.ToString().Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+        return true;
+
+     if (x.Nome.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+         return true;
+
+     if (x.NomeDaCategoria.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+        return true;
+
+         if ($"{x.Codigo} {x.Nome} {x.NomeDaCategoria} ".Contains(_searchString))
+         return true;
+
+     return false;
+     };
+}
+
+

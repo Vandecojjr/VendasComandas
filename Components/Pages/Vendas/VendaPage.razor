@@ -1,0 +1,12 @@
+﻿@page "/venda"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="false">
+    <MudTabPanel Text="Nova Venda">
+        <LancarVenda></LancarVenda>
+    </MudTabPanel>
+    <MudTabPanel Text="Vendas">
+        <VendasRealizadas></VendasRealizadas>
+    </MudTabPanel>
+</MudTabs>

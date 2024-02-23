@@ -1,0 +1,55 @@
+﻿@rendermode InteractiveServer
+@inject IMetodoDePagamentoServices MetodoDePagamentoServices
+
+<MudButton OnClick="() => AbrirOuFecharModalMetodoDePagamento()" Variant="Variant.Filled">Novo Metodo</MudButton>
+
+@if (abrirModalNovoMetodo)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal" tabindex="-1" role="dialog"
+         arial-hidden="true" style="display:block;">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">Caastrar novo Metodo de pagamento.</h6>
+                </div>
+                    <EditForm Model="metodo" OnSubmit="CadastrarNovoMetodo">
+                <div class="modal-body">
+                        <label for="nome">Nome</label>
+                        <InputText id="nome" class="form-control" @bind-Value="metodo.Nome"></InputText>
+
+                </div>
+                <div class="modal-footer">
+                    <MudButton Class="mx-3" ButtonType="ButtonType.Submit" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error">Deletar</MudButton>
+                    <MudButton OnClick="() => AbrirOuFecharModalMetodoDePagamento()" Variant="Variant.Filled">Cancelar</MudButton>
+                </div>
+                    </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@foreach (var item in metodos)
+{
+    <h6>@item.Nome</h6>
+}
+
+@code {
+    public bool abrirModalNovoMetodo = false;
+    List<MetodoDePagamento> metodos = new List<MetodoDePagamento>(); 
+    MetodoDePagamento metodo = new();
+
+    protected override async Task OnInitializedAsync() => metodos = await MetodoDePagamentoServices.GetAllMetodosAsync();
+    public void AbrirOuFecharModalMetodoDePagamento() => abrirModalNovoMetodo = !abrirModalNovoMetodo;
+
+    async Task CadastrarNovoMetodo()
+    {
+        await MetodoDePagamentoServices.AddMetodoAsync(metodo);
+        metodos = await MetodoDePagamentoServices.GetAllMetodosAsync();
+        metodo = new();
+        AbrirOuFecharModalMetodoDePagamento();
+    }
+
+
+
+}
