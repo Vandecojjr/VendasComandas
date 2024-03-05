@@ -1,12 +1,27 @@
 ﻿@page "/categorias"
-@using System.Globalization
-@attribute [Authorize]
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "EasyAdmin, Admin, categorias")]
+@attribute [StreamRendering]
 @inject ICategoriaServices CategoriaServices
 @inject NavigationManager NavigationManager
+@inject IUsuarioServices UsuarioServices
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using System.Globalization
+@using System.Threading.Tasks;
+@using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
 
-@rendermode InteractiveServer
+
+
 
 <PageTitle>Categorias</PageTitle>
+
+@if (carregando)
+{
+    <MudProgressLinear Color="Color.Info" Indeterminate="true"/>
+}
+else
+{
 
 <ModalDeConfirmacao @ref="confirmacaoDeDelete"
                     Titulo="Confirmação de exclusão."
@@ -15,12 +30,16 @@
     <h5>Deseja deletar a categoria <span class="text-danger">@nomeDaCategoria</span>?</h5>
 </ModalDeConfirmacao>
 
+<AuthorizeView Roles="EasyAdmin,Admin,cadastro/alteracao">
+    <Authorized>
 <MudButton Href="novaCategoria"
            Variant="Variant.Text"
            EndIcon="@Icons.Material.Filled.Add"
            Color="Color.Success">
     Nova Categoria
 </MudButton>
+    </Authorized>
+</AuthorizeView>
 
 <MudDataGrid T="Categoria" Filterable="true" Hideable="true" Items="@categorias" QuickFilter="@_quickFilter">
     <ToolBarContent>
@@ -34,24 +53,53 @@
         <PropertyColumn Property="x => x.Descricao" Sortable="false" Filterable="false" />
         <TemplateColumn Filterable="false" Sortable="false" CellClass="d-flex justify-end">
             <CellTemplate>
-                <MudIconButton Color="Color.Info" Icon="@Icons.Material.Outlined.Edit" OnClick="@(() => NavigationManager.NavigateTo($"/novaCategoria{context.Item.CategoriaId}"))" />
-                <MudIconButton Color="Color.Error" Icon="@Icons.Material.Outlined.Delete" OnClick="@(() => AbrirModalDeExclusao(context.Item.CategoriaId, context.Item.Nome))" />
+                @if (userRoles.Contains("EasyAdmin") || userRoles.Contains("Admin") || userRoles.Contains("cadastro/alteracao"))
+                {   
+                    <MudIconButton Color="Color.Info" Icon="@Icons.Material.Outlined.Edit" OnClick="@(() => NavigationManager.NavigateTo($"/novaCategoria{context.Item.CategoriaId}"))" />
+                    <MudIconButton Color="Color.Error" Icon="@Icons.Material.Outlined.Delete" OnClick="@(() => AbrirModalDeExclusao(context.Item.CategoriaId, context.Item.Nome))" />
+                }
+                else
+                {
+                    <MudIconButton Disabled="true" Color="Color.Info" Icon="@Icons.Material.Outlined.Edit" OnClick="@(() => NavigationManager.NavigateTo($"/novaCategoria{context.Item.CategoriaId}"))" />
+                    <MudIconButton Disabled="true" Color="Color.Error" Icon="@Icons.Material.Outlined.Delete" OnClick="@(() => AbrirModalDeExclusao(context.Item.CategoriaId, context.Item.Nome))" />
+                }
             </CellTemplate>
         </TemplateColumn>
     </Columns>
 </MudDataGrid>
-
+}
 
 @code {
-
+    bool carregando = true;
+    private List<string> userRoles = new List<string>();
     private List<Categoria> categorias = new List<Categoria>();
     private string _searchString;
 
     ModalDeConfirmacao confirmacaoDeDelete;
     private Guid removerCategoria { get; set; }
     private string nomeDaCategoria { get; set; }
+   
 
-    protected override async Task OnInitializedAsync() => categorias = await CategoriaServices.GetAllCategoriasAsync();
+    protected override async Task OnInitializedAsync() 
+    {
+        carregando = true;
+        categorias = await CategoriaServices.GetAllCategoriasAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        bool usuarioAtivo = await UsuarioServices.GetUsuarioAtivo();
+        if (!usuarioAtivo) NavigationManager.NavigateTo("/bloqueado");
+
+        if (user != null && user.Identity != null && user.Identity.IsAuthenticated)
+        {
+            if (user.Identity is ClaimsIdentity claimsIdentity)
+            {
+                var roleClaims = claimsIdentity.FindAll(ClaimTypes.Role);
+                userRoles = roleClaims.Select(c => c.Value).ToList();
+            }
+        }
+        carregando = false;
+
+    }
 
     void AbrirModalDeExclusao(Guid id, string nome)
     {
@@ -80,4 +128,7 @@
 
       return false;
       };
+
+
+
 }

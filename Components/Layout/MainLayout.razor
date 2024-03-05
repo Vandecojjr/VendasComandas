@@ -7,47 +7,21 @@
 
 <AuthorizeView>
     <Authorized>
-
-@*             <MudAppBar Elevation="0" Dense="true" Color="Color.Tertiary" >
-                <MudSpacer />
-                <div class="btn-group">
-                <button class="btn btn-secondary btn-sm" disabled>
-                    @context.User.Identity?.Name
-                </button>
-                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
-                    <span class="visually-hidden">Toggle Dropdown</span>
-                </button>
-                <ul class="dropdown-menu">
-                    <li>
-                        <form action="Account/Logout" method="post">
-                            <AntiforgeryToken />
-                            <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                            <button type="submit" class="dropdown-item text-danger">
-                                <span class="bi bi-box-arrow-left"></span> Sair
-                            </button>
-                        </form>
-                    </li>
-                </ul>
-            </div>
-      </MudAppBar>
-            <MudDrawer  ClipMode="DrawerClipMode.Always" Elevation="2" Open=" true">
-                <NavMenu></NavMenu>
-            </MudDrawer> *@
         <div class="page mud-layout">
 
             <div class="sidebar mud-elevation-1">
-                <div class="top-row mud-drawer-head">
+                <div class="top-row mud-drawer-head" style="background:#065A82;">
                 </div>
 
                 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-                <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+                <div class="nav-scrollable" style="background:white;" onclick="document.querySelector('.navbar-toggler').click()">
                     <NavMenu />
                 </div>
 
             </div>
 
             <main>
-                <div class="top-row px-4">
+                <div class="top-row px-4" style="background:#065A82;">
                     <MudChip Icon="@Icons.Material.Filled.Person" Color="Color.Dark">@context.User.Identity?.Name</MudChip>
                     <form action="Account/Logout" method="post">
                         <AntiforgeryToken />
@@ -55,7 +29,7 @@
                         <MudIconButton ButtonType="ButtonType.Submit" Icon="@Icons.Material.Filled.ExitToApp" Color="Color.Dark" />
                     </form>
                 </div>
-                    <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Style="background:#ECEFF1;" Class="my-2 pt-2">
+                    <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Style="background:#ECEFF1;" Class="py-2">
                     @Body
                 </MudContainer>
             </main>

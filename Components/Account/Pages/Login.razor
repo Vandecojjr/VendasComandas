@@ -95,16 +95,16 @@
                         <InputText type="password" @bind-Value="Input.Password" style="outline: none; width: 200px;" autocomplete="current-password" aria-required="true" placeholder="Senha" />
                 </MudPaper>
             </MudItem>
-                    <MudItem>
+                    @* <MudItem>
                     <label class="form-label">
                         <InputCheckbox @bind-Value="Input.RememberMe" class="ms-6" />
                         Remember me
                     </label>
-                    </MudItem>
+                    </MudItem> *@
                 <MudItem xs="11">
                     <MudButton ButtonType="ButtonType.Submit"  Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="ms-4 my-3">LOG IN</MudButton>
                 </MudItem>
-                <MudLink Href="Account/ForgotPassword" Class="ms-16">Esqueci minha senha.</MudLink>
+                @* <MudLink Href="Account/ForgotPassword" Class="ms-16">Esqueci minha senha.</MudLink> *@
             </EditForm>
     </MudPaper>
 </MudGrid>

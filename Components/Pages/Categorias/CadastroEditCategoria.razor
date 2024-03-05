@@ -1,9 +1,19 @@
 ﻿@page "/novaCategoria"
 @page "/novaCategoria{Id:guid}"
-@attribute [Authorize]
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "EasyAdmin, Admin, cadastro/alteracao")]
+@attribute [StreamRendering]
 @inject ICategoriaServices CategoriaServices
 @inject NavigationManager NavigationManager
-@rendermode InteractiveServer
+@inject IUsuarioServices UsuarioServices
+@using System.Threading.Tasks;
+
+@if (carregando)
+{
+    <MudProgressLinear Color="Color.Info" Indeterminate="true"/>
+}
+else
+{
 
 @if (Id is null)
 {
@@ -31,17 +41,25 @@ else
     <div class="p-2">
         <label></label>
         <button type="submit" class="btn btn-info">Salvar</button>
-        <button class="btn btn-secondary" onclick="@(()=> NavigationManager.NavigateTo("/categorias"))">Voltar</button>
+        <button type="button" class="btn btn-secondary" onclick="@(()=> NavigationManager.NavigateTo("/categorias"))">Voltar</button>
     </div>
 </EditForm>
-
+}
 @code {
 
+    public bool carregando = true;
     [Parameter]
     public Guid? Id { get; set; }
 
     public Categoria categoria { get; set; } = new();
 
+    protected override async Task OnInitializedAsync()
+    {
+        carregando = true;
+        bool usuarioAtivo = await UsuarioServices.GetUsuarioAtivo();
+        if (!usuarioAtivo) NavigationManager.NavigateTo("/bloqueado");
+        carregando = false;
+    }
 
     protected override async Task OnParametersSetAsync()
     {

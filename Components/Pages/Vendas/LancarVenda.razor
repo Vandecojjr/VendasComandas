@@ -1,12 +1,14 @@
 ﻿@rendermode InteractiveServer
-
+@attribute [StreamRendering]
 @inject IToastService toastService
 @inject IProdutoServices ProdutoServices
 @inject IVendaServices VendaServices
 @inject IMetodoDePagamentoServices MetodoDePagamentoServices
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
-
+@inject ICaixaServices CaixaServices
+@inject IUsuarioServices UsuarioServices
+@inject IClienteServices ClienteServices
 
 @using Blazored.Toast.Configuration
 @using Blazored.Typeahead
@@ -18,6 +20,12 @@
                 WarningIcon="warning" />
 
 
+@if (carregando)
+{
+    <MudProgressLinear Color="Color.Info" Indeterminate="true"/>
+}
+else
+{
 @* Modal para a confirmação de exlusção do item lancado. *@
 
 <ModalDeConfirmacao @ref="modalConfirma" onCancela="() => modalConfirma.Ocultar()" onConfirma="() => RemoverItemDaListaDeVendas(idDoItemAserDeletado)">
@@ -26,7 +34,17 @@
 
 @* --------------------------------------------- *@
 
-@if (metodosDePagamento.Count == 0)
+
+
+@if (bloqueioModal && caixaAtual == null)
+{
+    <ModalDeBloqueio Titulo="Abra o caixa antes de realizar uma venda"
+                     onCancela="@(()=> NavigationManager.NavigateTo("/"))"
+                     onConfirma="@(()=> NavigationManager.NavigateTo("/caixa"))">
+        Por favor abra o caixa para esta operação.
+    </ModalDeBloqueio>
+}
+else if (bloqueioModal)
 {
     <ModalDeBloqueio Titulo="Cadastre um Metodo de pagamento"
                      onCancela="@(()=> NavigationManager.NavigateTo("/produtos"))"
@@ -34,7 +52,6 @@
         Por favor cadastre Pelomenos um metodo de pagamento
     </ModalDeBloqueio>
 }
-
 
 @* Modal para o fechamento de venda. *@
 
@@ -76,9 +93,18 @@
                             </InputSelect>
                             <label for="valor"><h6>Valor</h6></label>
                             <InputNumber @onblur="AtualizaFaltaPagar" @onkeydown="@(e => CompletaValorDoInput(item, e))" id="valor" class="form-control mb-2" @bind-Value="item.Valor"></InputNumber>
-                            
                             <MudButton OnClick="() => RemoveFormaDePagamento(item)" Class="mx-3" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error"></MudButton>
                         }
+                         <MudPaper Elevation="0" Class="m-3">
+                            <label for="clientes"><h6>Cliente</h6></label>
+                            <InputSelect id="clientes" class="form-control" @bind-Value="clienteId">
+                                <option selected>Selecione um cliente</option>
+                                @foreach (var cli in clientes)
+                                {
+                                    <option value="@cli.Id">@cli.Nome</option>
+                                }
+                            </InputSelect>
+                         </MudPaper>
                     </MudPaper>
                     <MudPaper Elevation="0" Class="d-flex">
                         <MudButton OnClick="() => AdicionarFormaDePagamento()" Class="mx-2" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" Color="Color.Success">Forma de pagamento</MudButton>
@@ -104,7 +130,7 @@
                         <MudPaper Class="d-flex px-3 pt-2" Style="background:#CFD8DC;">
                             <h3>Troco</h3>
                             <MudSpacer />
-                            <h2 aria-hidden="true" class="text-dark">@faltaPagar.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR"))</h2>
+                            <h2 aria-hidden="true" class="text-dark">@((faltaPagar * -1).ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR")))</h2>
                         </MudPaper>
                     }
                     else
@@ -117,8 +143,36 @@
                     }
                 </div>
                 <div class="modal-footer">
-                    <MudButton OnClick="() => ConfirmarVenda()" Class="mx-3" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.AttachMoney" Color="Color.Success">Confirmar</MudButton>
-                    <MudButton OnClick="() => FecharModalDeVenda()" Variant="Variant.Filled">Cancelar</MudButton>
+                        @if (carregandoVenda)
+                        {
+                            <MudProgressLinear Color="Color.Info" Indeterminate="true" Class="my-7" />
+                        }
+                        else
+                        {
+                            <MudButton OnClick="() => ConfirmarVenda()" Class="mx-3" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.AttachMoney" Color="Color.Success">Confirmar</MudButton>
+                            <MudButton OnClick="() => FecharModalDeVenda()" Variant="Variant.Filled">Cancelar</MudButton>
+                        }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (modalMensagem)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal" tabindex="-1" role="dialog"
+         arial-hidden="true" style="display:block;">
+        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title"></h6>
+                </div>
+                <div class="modal-body">
+                    <span class="text-danger">@textoModalMensagem</span>
+                </div>
+                <div class="modal-footer">
+                    <MudButton OnClick="openCloseModalMensagem" Class="mx-3" Variant="Variant.Filled" Color="Color.Info">Ok</MudButton>
                 </div>
             </div>
         </div>
@@ -127,10 +181,11 @@
 
 @* --------------------------------------------- *@
 
-<MudPaper Class="p-3">
+<MudPaper Class="p-3 mb-3">
     <MudGrid>
         <MudItem sm="6" xs="12">
             <h5>Produto</h5>
+            <MudFocusTrap Disabled="false" DefaultFocus="DefaultFocus.FirstChild">
             <BlazoredTypeahead SearchMethod="buscar" @bind-Value="produtoSelecionado">
                 <SelectedTemplate>
                     Cod @context.Codigo ------- @context.Nome  ---- @context.Valor?.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR"))--------------- Qtd.(@context.Quantidade)
@@ -139,6 +194,7 @@
                     Cod @context.Codigo ------- <h5>@context.Nome  @context.Valor?.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR"))</h5> --------------- Qtd.(@context.Quantidade)
                 </ResultTemplate>
             </BlazoredTypeahead>
+            </MudFocusTrap>
         </MudItem>
         <MudItem sm="2" xs="6">
             <h5>Quantidade</h5>
@@ -162,7 +218,7 @@
 
 @if (produtosLancados.Count != 0)
 {
-    <MudGrid Class="pt-4" Spacing="1">
+    <MudGrid Class="pt-4 mb-3" Spacing="1">
         <MudItem xs=12 sm=6>
             <MudPaper Style="background:#C5E1A5;" Class="d-flex align-center justify-center mud-width-full py-3">
                 <h2 class="pe-5 text-success">Sub-Total</h2>
@@ -183,17 +239,17 @@
          @foreach (var item in produtosLancados)
         {
             <MudPaper Height="70px" Class="d-flex align-center justify-center mud-width-full my-2 px-1">
-                <MudItem Class="py-0" xs="9">
+                <MudItem Class="py-0" xs="8">
                     <h5>@item.Quantidade x @item.Nome</h5>
                 </MudItem>
-                <MudItem >
+                <MudItem xs="4">
                     @if (item.Desconto == null || item.Desconto == 0)
                     {
                         <h4 class="text-success">@((produtos.FirstOrDefault(x => x.Id == item.IdDoProduto)?.Valor * item.Quantidade)?.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR")))</h4>
                     }
                     else
                     {
-                        <h4 class="text-success">@(((produtos.FirstOrDefault(x => x.Id == item.IdDoProduto)?.Valor * item.Quantidade) - item.Desconto)?.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR")))</h4>
+                        <h5 class="text-success">@(((produtos.FirstOrDefault(x => x.Id == item.IdDoProduto)?.Valor * item.Quantidade) - item.Desconto)?.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR")))</h5>
                         <h8 class="text-success"><s>@((produtos.FirstOrDefault(x => x.Id == item.IdDoProduto)?.Valor * item.Quantidade)?.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR")))</s></h8>
                         <h8 class="text-danger"> -@item.Desconto?.ToString("C", System.Globalization.CultureInfo.CreateSpecificCulture("pt-BR"))</h8>
                     }
@@ -205,9 +261,12 @@
         }
     </MudGrid>
 }
+}
 
 
 @code {
+    public bool carregando = true;
+    private Caixa caixaAtual = null;
     private Produto produtoSelecionado;
     private FormaDePagamento formaDePagamento = new();
     private int quantidade { get; set; }
@@ -216,25 +275,45 @@
     private decimal  descontoAlterado { get; set; }
     private bool modoPorcent = false;
     private decimal total { get; set; }
+    private decimal totalfixo { get; set; }
     private decimal faltaPagar { get; set; }
     private Guid idDoItemAserDeletado { get; set; }
     private bool abrirModalVenda = false;
     private bool dividirConta = false;
     private bool alterarDesconto = false;
+    private bool bloqueioModal = false;
     private int quantidadeDePessoas = 1;
     ModalDeConfirmacao modalConfirma = new();
+    Guid clienteId { get; set; }
+    
+    bool carregandoVenda = false;
+
+    public bool modalMensagem = false;
+    public string textoModalMensagem { get; set; }
 
     private List<Produto> produtos = new List<Produto>();
     private List<ProdutoVendido> produtosLancados = new List<ProdutoVendido>();
     private List<MetodoDePagamento> metodosDePagamento = new List<MetodoDePagamento>();
     private List<FormaDePagamento> formasDePagamento = new List<FormaDePagamento>();
+    private List<Cliente> clientes = new List<Cliente>();
 
+
+    Usuario user = new();
+
+    public void openCloseModalMensagem() => modalMensagem = !modalMensagem;
 
     protected override async Task OnInitializedAsync() 
     { 
+        carregando = true;
         produtos = await ProdutoServices.GetAllProdutosAsync();
         metodosDePagamento = await MetodoDePagamentoServices.GetAllMetodosAsync();
         formasDePagamento.Add(formaDePagamento);
+        caixaAtual = await CaixaServices.GetCaixaAberto();
+        bool usuarioAtivo = await UsuarioServices.GetUsuarioAtivo();
+        if (!usuarioAtivo) NavigationManager.NavigateTo("/bloqueado");
+        user = await UsuarioServices.GetUsuario();
+        clientes = await ClienteServices.ObterTodos();
+        carregando = false;
     }
 
     //fuções do modal de fhechamento de venda.
@@ -246,26 +325,95 @@
         abrirModalVenda = true;
     }
 
-    public async void ConfirmarVenda()
+    public async Task ConfirmarVenda()
     {
+        carregandoVenda = true;
+        Cliente cliente = await ClienteServices.GetCliente((Guid)clienteId);
+        bool metodoDePagamentoNulo = false;
+        bool aprazo = false;
+
+        foreach (var item in formasDePagamento)
+        {
+            if (item.MetodoDePagamentoId == Guid.Empty) metodoDePagamentoNulo = true;
+            else
+            {
+                var metodoConfere = await MetodoDePagamentoServices.GetMetodoDePagamentoAsync(item.MetodoDePagamentoId);
+                if (metodoConfere.Nome == "Aprazo") aprazo = true;
+            }
+        }
         if (faltaPagar > 0)
         {
-            toastService.ShowError($"Ainda faltam R${faltaPagar} do valor TOTAL para concluir.");
+            openCloseModalMensagem();
+            textoModalMensagem = $"Ainda faltam R${faltaPagar} do valor TOTAL para concluir.";
+            carregandoVenda = false;
+        }
+        else if (metodoDePagamentoNulo)
+        {
+            openCloseModalMensagem();
+            textoModalMensagem = "Todas as formas de pagamento devem ser selecionadas.";
+            carregandoVenda = false;
+        }
+        else if ((descontoTotal / total) > user.porcentagemUsuario)
+        {
+            openCloseModalMensagem();
+            textoModalMensagem = $"Você não tem permição para descontos maiors que {user.porcentagemUsuario * 100} %";
+            carregandoVenda = false;
         }
         else
         {
-            List<ProdutoVendido> listaDeProdutos = new List<ProdutoVendido>(produtosLancados);
-            List<FormaDePagamento> listaDeFormasDePagamentos = new List<FormaDePagamento>(formasDePagamento);
-            Venda vendaModal = new();
-            vendaModal.Total = total;
-            vendaModal.Descontos = descontoTotal;
-            produtosLancados.Clear();
-            formasDePagamento.Clear();
-            total = 0;
-            descontoTotal = 0;
-            abrirModalVenda = false;
-            toastService.ShowSuccess("Venda realizada com SUCESSO!");
-            await VendaServices.AddVendaAsync(vendaModal, listaDeProdutos, listaDeFormasDePagamentos);
+            if (aprazo)
+            {
+                if (cliente == null)
+                {
+                    openCloseModalMensagem();
+                    textoModalMensagem = "Para vender A prazo tem que selecinar um cliente.";
+
+                }
+                else if ((total - descontoTotal) > cliente.LimiteRestante)
+                {
+                    openCloseModalMensagem();
+                    textoModalMensagem = "O limite do cliente ja foi excedido";
+                }
+                else
+                {
+                   
+                    List<ProdutoVendido> listaDeProdutos = new List<ProdutoVendido>(produtosLancados);
+                    List<FormaDePagamento> listaDeFormasDePagamentos = new List<FormaDePagamento>(formasDePagamento);
+                    Venda vendaModal = new();
+                    vendaModal.Total = total;
+                    vendaModal.Descontos = descontoTotal;
+                    vendaModal.Caixa = caixaAtual;
+                    vendaModal.IdCliente = cliente.Id;
+                    vendaModal.NomeDoCliente = cliente.Nome;
+                    produtosLancados.Clear();
+                    formasDePagamento.Clear();
+                    total = 0;
+                    descontoTotal = 0;
+                    await VendaServices.AddVendaAsync(vendaModal, listaDeProdutos, listaDeFormasDePagamentos);
+                    abrirModalVenda = false;
+                    toastService.ShowSuccess("Venda realizada com SUCESSO!");
+                    carregandoVenda = false;
+                }
+
+            }
+            else
+            {
+                List<ProdutoVendido> listaDeProdutos = new List<ProdutoVendido>(produtosLancados);
+                List<FormaDePagamento> listaDeFormasDePagamentos = new List<FormaDePagamento>(formasDePagamento);
+                Venda vendaModal = new();
+                vendaModal.Total = total;
+                vendaModal.Descontos = descontoTotal;
+                vendaModal.Caixa = caixaAtual;
+                produtosLancados.Clear();
+                formasDePagamento.Clear();
+                total = 0;
+                descontoTotal = 0;
+                await VendaServices.AddVendaAsync(vendaModal, listaDeProdutos, listaDeFormasDePagamentos);
+                abrirModalVenda = false;
+                toastService.ShowSuccess("Venda realizada com SUCESSO!");
+                carregandoVenda = false;
+            }
+
         }
     }
 
@@ -295,37 +443,80 @@
         modalConfirma.Ocultar();
     }
 
-    public void LancarProduto(Produto produto, int quantidade, decimal desc)
+    public async void LancarProduto(Produto produto, int quantidade, decimal desc)
     {
+        
         if ((int)quantidade <= 0)
         {
             toastService.ShowError("A quantidade do produto deve ser maior que zero!");
         }
+        else if (metodosDePagamento.Count == 0 || caixaAtual == null)
+        {
+            bloqueioModal = true;
+        }
+        else if (produto.IsControled && (produto.Quantidade - quantidade) < 0)
+        {
+            toastService.ShowError("O quantidade em estoque deste produto não permite esta venda!");
+        }
         else
         {
             var produtoExiste = produtosLancados.FirstOrDefault(x => x.IdDoProduto == produto.Id);
+            decimal confereDesconto = 0;
+
+            confereDesconto = desc / ((decimal)produto.Valor * quantidade);
 
             if (modoPorcent)
             {
+                confereDesconto = desc / 100;
                 desc = desc / 100 * ((decimal)produto.Valor * quantidade);
             }
-
+            
             total += ((decimal)produto.Valor * quantidade) - desc;
+            totalfixo = total + desc;
             descontoTotal += desc;
 
-            if (produtoExiste != null ) 
+            if (user.NivelAdmin == 2)
             {
-                produtoExiste.Quantidade += quantidade;
-                produtoExiste.Desconto += desc;
+                if (confereDesconto > user.porcentagemUsuario)
+                {
+                    toastService.ShowError($"Você não tem permição para descontos maiors que {user.porcentagemUsuario * 100} %");
+                }
+                else
+                {
+
+                    if (produtoExiste != null)
+                    {
+                        produtoExiste.Quantidade += quantidade;
+                        produtoExiste.Desconto += desc;
+                    }
+                    else
+                    {
+                        ProdutoVendido produtoAtualizado = new ProdutoVendido();
+                        produtoAtualizado.IdDoProduto = produto.Id;
+                        produtoAtualizado.Nome = produto.Nome;
+                        produtoAtualizado.Quantidade = (int)quantidade;
+                        produtoAtualizado.Desconto = desc;
+                        produtosLancados.Add(produtoAtualizado);
+                    }
+                }
             }
             else
             {
-                ProdutoVendido produtoAtualizado = new ProdutoVendido();
-                produtoAtualizado.IdDoProduto = produto.Id;
-                produtoAtualizado.Nome = produto.Nome;
-                produtoAtualizado.Quantidade = (int)quantidade;
-                produtoAtualizado.Desconto = desc;
-                produtosLancados.Add(produtoAtualizado);
+
+                if (produtoExiste != null)
+                {
+                    produtoExiste.Quantidade += quantidade;
+                    produtoExiste.Desconto += desc;
+                }
+                else
+                {
+                    ProdutoVendido produtoAtualizado = new ProdutoVendido();
+                    produtoAtualizado.IdDoProduto = produto.Id;
+                    produtoAtualizado.Nome = produto.Nome;
+                    produtoAtualizado.Quantidade = (int)quantidade;
+                    produtoAtualizado.Desconto = desc;
+                    produtosLancados.Add(produtoAtualizado);
+                }
             }
             LimparInputs();
         }
@@ -334,7 +525,7 @@
 
     public void AtualizaFaltaPagar()
     {
-        faltaPagar = total - descontoTotal;
+        faltaPagar = totalfixo - descontoTotal;
         decimal novoTotal = 0;
         foreach (var item in formasDePagamento)
         {
@@ -357,6 +548,7 @@
     private void AlterarDescontoInput(ChangeEventArgs args)
     {
         string valorString = args.Value.ToString();
+        total = totalfixo;
         if (modoPorcent)
         {
             if (int.TryParse(valorString, out int valorinteiro))
